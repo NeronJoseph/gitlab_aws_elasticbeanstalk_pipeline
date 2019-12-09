@@ -1,0 +1,34 @@
+image: docker:18-git
+
+services:
+   - docker:18-dind
+
+before_script:
+    # Installing AWS CLI and EB CLI
+    - apk add --no-cache curl jq python py-pip
+    - pip install awscli
+    - pip install awsebcli --upgrade --user
+    # Configuring AWS on Runner
+    - export PATH=~/.local/bin:$PATH
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID --profile <aws_profile>
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY --profile <aws_profile>
+    - aws configure set region <region_code> --profile <aws_profile>
+
+stages: 
+  - build
+  - deploy
+
+Build and Deploy to Server: 
+  tags: 
+    - <runner_tag>
+  only:
+    - git_branch
+  stage: deploy
+  script:
+    # Build and push to Container Registry
+    - $(aws ecr get-login --no-include-email --region us-west-2)
+    - docker build -t $DEV_IMAGE .
+    - docker tag $DEV_IMAGE $DEV_IMAGE:$CI_COMMIT_SHA
+    - docker push $DEV_IMAGE
+    - git add .
+    - eb deploy ElasticBeanstalkEnv --staged --profile <aws_profile>
